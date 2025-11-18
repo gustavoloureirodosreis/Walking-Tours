@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+inference-sdk
+supervision
+python-multipart
+opencv-python-headless
+numpy
+python-dotenv
+pandas
+yt-dlp

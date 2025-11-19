@@ -1,14 +1,20 @@
 "use client";
 
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
+
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 interface DataPoint {
   timestamp: number;
@@ -17,8 +23,15 @@ interface DataPoint {
 
 interface CrowdDensityChartProps {
   data: DataPoint[];
-  onClick?: (data: any) => void;
+  onSeek?: (timestamp: number) => void;
 }
+
+const chartConfig = {
+  count: {
+    label: "Crowd count",
+    color: "var(--primary)",
+  },
+} satisfies ChartConfig;
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -26,99 +39,115 @@ const formatTime = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-popover p-3 border border-border shadow-lg rounded-lg">
-        <p className="text-sm font-medium text-muted-foreground font-mono">{`Time: ${label}`}</p>
-        <p className="text-sm font-bold text-primary font-serif">{`People: ${payload[0].value}`}</p>
-      </div>
-    );
-  }
-  return null;
-};
-
 export default function CrowdDensityChart({
   data,
-  onClick,
+  onSeek,
 }: CrowdDensityChartProps) {
   if (!data || data.length === 0) return null;
 
-  const chartData = data.map((d) => ({
-    ...d,
-    timeLabel: formatTime(d.timestamp),
-  }));
+  const handleChartClick = (state: any) => {
+    if (!onSeek) return;
+
+    const timestampFromPayload =
+      state?.activePayload?.[0]?.payload?.timestamp ?? null;
+    const timestampFromLabel =
+      typeof state?.activeLabel === "number" ? state.activeLabel : null;
+
+    const timestamp =
+      typeof timestampFromPayload === "number"
+        ? timestampFromPayload
+        : timestampFromLabel;
+
+    if (typeof timestamp === "number" && !Number.isNaN(timestamp)) {
+      onSeek(timestamp);
+    }
+  };
 
   return (
-    <div className="w-full h-full">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-bold text-card-foreground font-serif">
+    <div className="flex h-full w-full flex-col">
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="font-serif text-lg font-bold text-card-foreground">
           Crowd Density over Time
         </h3>
-        <span className="text-xs font-medium text-muted-foreground px-3 py-1 bg-muted/50 rounded-full border border-border font-mono">
-          Click chart to seek video
+        <span className="rounded-full border border-border bg-muted/50 px-3 py-1 text-xs font-mono font-medium text-muted-foreground">
+          Click a timestamp to seek video
         </span>
       </div>
-      <ResponsiveContainer width="100%" height="85%">
-        <AreaChart
-          data={chartData}
-          onClick={onClick}
-          margin={{
-            top: 10,
-            right: 30,
-            left: 0,
-            bottom: 0,
-          }}
-        >
-          <defs>
-            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.5} />
-              <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            vertical={false}
-            stroke="var(--border)"
-            strokeOpacity={0.5}
-          />
-          <XAxis
-            dataKey="timeLabel"
-            axisLine={false}
-            tickLine={false}
-            tick={{
-              fill: "var(--muted-foreground)",
-              fontSize: 12,
-              fontFamily: "var(--font-mono)",
-            }}
-            dy={10}
-          />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            tick={{
-              fill: "var(--muted-foreground)",
-              fontSize: 12,
-              fontFamily: "var(--font-mono)",
-            }}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Area
-            type="monotone"
-            dataKey="count"
-            stroke="var(--primary)"
-            strokeWidth={3}
-            fillOpacity={1}
-            fill="url(#colorCount)"
-            activeDot={{
-              r: 6,
-              strokeWidth: 0,
-              fill: "var(--background)",
-              stroke: "var(--primary)",
-            }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+
+      <ChartContainer config={chartConfig} className="h-full min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={data}
+            onClick={handleChartClick}
+            margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+            className="cursor-pointer"
+          >
+            <defs>
+              <linearGradient id="countGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor="var(--primary)"
+                  stopOpacity={0.5}
+                />
+                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              stroke="var(--border)"
+              strokeDasharray="3 3"
+              strokeOpacity={0.4}
+              vertical={false}
+            />
+            <XAxis
+              dataKey="timestamp"
+              type="number"
+              axisLine={false}
+              tickLine={false}
+              tickMargin={12}
+              tickFormatter={(value) => formatTime(Number(value))}
+              tick={{
+                fill: "var(--muted-foreground)",
+                fontSize: 12,
+                fontFamily: "var(--font-mono)",
+              }}
+              domain={["dataMin", "dataMax"]}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{
+                fill: "var(--muted-foreground)",
+                fontSize: 12,
+                fontFamily: "var(--font-mono)",
+              }}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  indicator="dot"
+                  labelFormatter={(value) =>
+                    `Time ${formatTime(Number(value))}`
+                  }
+                />
+              }
+            />
+            <Area
+              type="monotone"
+              dataKey="count"
+              stroke="var(--primary)"
+              strokeWidth={3}
+              fill="url(#countGradient)"
+              fillOpacity={1}
+              activeDot={{
+                r: 6,
+                fill: "var(--background)",
+                strokeWidth: 2,
+                stroke: "var(--primary)",
+              }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </ChartContainer>
     </div>
   );
 }

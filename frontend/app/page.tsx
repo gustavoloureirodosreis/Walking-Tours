@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import StatsCards from "@/components/StatsCards";
 import CrowdDensityChart from "@/components/CrowdDensityChart";
 import { Activity, Youtube, PlayCircle, AlertCircle } from "lucide-react";
-import YouTube, { YouTubeEvent } from "react-youtube";
+import YouTube, { YouTubeEvent, YouTubePlayer } from "react-youtube";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface AnalysisResult {
@@ -19,7 +19,7 @@ export default function Home() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [progress, setProgress] = useState<string>("");
   const [videoId, setVideoId] = useState<string | null>(null);
-  const playerRef = useRef<YouTube | null>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleAbort = () => {
@@ -129,11 +129,13 @@ export default function Home() {
     }
   };
 
-  const onChartClick = (data: any) => {
-    if (data && data.activePayload && playerRef.current) {
-      const timestamp = data.activePayload[0].payload.timestamp;
-      playerRef.current.internalPlayer.seekTo(timestamp, true);
+  const handleChartSeek = (timestamp: number) => {
+    const player = playerRef.current;
+    if (!player || typeof player.seekTo !== "function") {
+      console.warn("Video player not ready for seeking");
+      return;
     }
+    player.seekTo(timestamp, true);
   };
 
   const onPlayerReady = (event: YouTubeEvent) => {
@@ -296,7 +298,7 @@ export default function Home() {
             <div className="grid lg:grid-cols-3 gap-8 h-[500px]">
               {/* Chart Section */}
               <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6 shadow-lg">
-                <CrowdDensityChart data={data} onClick={onChartClick} />
+                <CrowdDensityChart data={data} onSeek={handleChartSeek} />
               </div>
 
               {/* Video Player */}

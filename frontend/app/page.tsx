@@ -96,7 +96,9 @@ export default function Home() {
             const event = JSON.parse(line);
             console.log("Event:", event); // Debug log
 
-            if (event.status === "hashing") setProgress("Checking cache...");
+            if (event.status === "hashing") setProgress("Preparing video...");
+            if (event.status === "checking_url")
+              setProgress("Verifying video availability...");
             if (event.status === "downloading")
               setProgress("Downloading video...");
             if (event.status === "cached") setProgress("Loading from cache...");

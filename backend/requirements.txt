@@ -8,3 +8,4 @@ numpy
 python-dotenv
 pandas
 yt-dlp
+google-api-python-client

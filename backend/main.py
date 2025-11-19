@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import tempfile
 import os
+import cv2
+import numpy as np
 import supervision as sv
 from typing import List, Dict
 import hashlib
@@ -41,6 +43,7 @@ ROBOFLOW_MODEL_ID = os.environ.get(
 )
 ROBOFLOW_CONFIDENCE = float(os.environ.get("ROBOFLOW_CONFIDENCE", "0.2"))
 FRAME_INTERVAL_SECONDS = float(os.environ.get("FRAME_INTERVAL_SECONDS", "1"))
+MOTION_THRESHOLD = float(os.environ.get("MOTION_THRESHOLD", "15"))
 
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
@@ -59,6 +62,16 @@ def get_file_hash(file_path: str) -> str:
 def determine_stride(fps: float) -> int:
     """Return frame stride based on a fixed sampling interval."""
     return max(1, int(fps * FRAME_INTERVAL_SECONDS))
+
+def has_significant_motion(current_frame, previous_frame) -> bool:
+    """Simple frame-diff motion gating."""
+    if previous_frame is None:
+        return True
+    gray_current = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+    gray_previous = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
+    diff = cv2.absdiff(gray_current, gray_previous)
+    score = float(np.mean(diff))
+    return score >= MOTION_THRESHOLD
 
 async def process_video_analysis_stream(file_path: str, api_key: str):
     """Generator that yields progress updates and final result."""
@@ -87,6 +100,8 @@ async def process_video_analysis_stream(file_path: str, api_key: str):
     total_frames = video_info.total_frames
 
     frame_generator = sv.get_video_frames_generator(file_path)
+    previous_frame = None
+    last_count = 0
 
     for i, frame in enumerate(frame_generator):
         if i % stride != 0:
@@ -99,18 +114,23 @@ async def process_video_analysis_stream(file_path: str, api_key: str):
             # Small sleep to allow event loop to process other things if needed
             await asyncio.sleep(0)
 
-        result = CLIENT.infer(
-            frame,
-            model_id=ROBOFLOW_MODEL_ID,
-            confidence=ROBOFLOW_CONFIDENCE,
-        )
-        detections = sv.Detections.from_inference(result)
-        detections = detections[detections.class_id == 0]
-
         timestamp = i / fps
+        motion_detected = has_significant_motion(frame, previous_frame)
+        previous_frame = frame
+
+        if motion_detected:
+            result = CLIENT.infer(
+                frame,
+                model_id=ROBOFLOW_MODEL_ID,
+                confidence=ROBOFLOW_CONFIDENCE,
+            )
+            detections = sv.Detections.from_inference(result)
+            detections = detections[detections.class_id == 0]
+            last_count = len(detections)
+
         timeline.append({
             "timestamp": float(f"{timestamp:.2f}"),
-            "count": len(detections)
+            "count": last_count
         })
 
     # 4. Save to Cache
@@ -200,6 +220,8 @@ async def analyze_youtube_stream(request: YouTubeRequest):
                 total_frames = video_info_sv.total_frames
 
                 frame_generator = sv.get_video_frames_generator(temp_path)
+                previous_frame = None
+                last_count = 0
 
                 for i, frame in enumerate(frame_generator):
                     if i % stride != 0:
@@ -210,18 +232,23 @@ async def analyze_youtube_stream(request: YouTubeRequest):
                         yield json.dumps({"status": "analyzing", "progress": progress}) + "\n"
                         await asyncio.sleep(0)
 
-                    result = CLIENT.infer(
-                        frame,
-                        model_id=ROBOFLOW_MODEL_ID,
-                        confidence=ROBOFLOW_CONFIDENCE,
-                    )
-                    detections = sv.Detections.from_inference(result)
-                    detections = detections[detections.class_id == 0]
-
                     timestamp = i / fps
+                    motion_detected = has_significant_motion(frame, previous_frame)
+                    previous_frame = frame
+
+                    if motion_detected:
+                        result = CLIENT.infer(
+                            frame,
+                            model_id=ROBOFLOW_MODEL_ID,
+                            confidence=ROBOFLOW_CONFIDENCE,
+                        )
+                        detections = sv.Detections.from_inference(result)
+                        detections = detections[detections.class_id == 0]
+                        last_count = len(detections)
+
                     timeline.append({
                         "timestamp": float(f"{timestamp:.2f}"),
-                        "count": len(detections)
+                        "count": last_count
                     })
 
                 # Save to Cache

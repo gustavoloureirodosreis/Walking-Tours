@@ -24,7 +24,7 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: "Crowd Density Analytics",
   description:
-    "Real-time crowd flow analysis using Roboflow Inference and YOLO11",
+    "Real-time crowd flow analysis using Roboflow Inference and People Detection model",
 };
 
 export default function RootLayout({

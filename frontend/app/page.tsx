@@ -185,8 +185,10 @@ export default function Home() {
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl font-sans">
             Real-time AI crowd density analysis powered by{" "}
-            <span className="text-primary font-bold">Roboflow Inference</span> &{" "}
-            <span className="text-primary font-bold">YOLO11</span>.
+            <span className="text-primary font-bold">Roboflow Inference</span>{" "}
+            using a{" "}
+            <span className="text-primary font-bold">People Detection</span>{" "}
+            model.
           </p>
         </header>
 

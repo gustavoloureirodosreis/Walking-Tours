@@ -1,6 +1,6 @@
 # Crowd Density Analytics Dashboard
 
-A demo application for analyzing crowd density in videos using Roboflow's Inference SDK and YOLO11 (SOTA).
+A demo application for analyzing crowd density in videos using Roboflow's Inference SDK with a specialized People Detection model.
 
 ## Architecture
 

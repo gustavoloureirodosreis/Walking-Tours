@@ -1,23 +1,24 @@
 import type { Metadata } from "next";
-import { Libre_Baskerville, Lora, IBM_Plex_Mono } from "next/font/google";
+import { DM_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-const libreBaskerville = Libre_Baskerville({
-  weight: ["400", "700"],
+const dmSansSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
-  subsets: ["latin"],
 });
 
-const lora = Lora({
+const dmSansSerif = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-serif",
-  subsets: ["latin"],
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
-  weight: ["400", "500", "600"],
-  variable: "--font-mono",
+const spaceMono = Space_Mono({
   subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -34,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="antialiased" suppressHydrationWarning>
       <body
-        className={`${libreBaskerville.variable} ${lora.variable} ${ibmPlexMono.variable} bg-background text-foreground`}
+        className={`${dmSansSans.variable} ${dmSansSerif.variable} ${spaceMono.variable} bg-background text-foreground`}
       >
         <ThemeProvider>{children}</ThemeProvider>
       </body>

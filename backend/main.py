@@ -1,274 +1,109 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+"""FastAPI application for crowd density analysis."""
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-import tempfile
-import os
-import cv2
-import numpy as np
-import supervision as sv
-from typing import List, Dict
-import hashlib
-import json
-import pandas as pd
-from pathlib import Path
-from pydantic import BaseModel
-import yt_dlp
-import asyncio
 from fastapi.responses import StreamingResponse
-import requests
+import tempfile
+import json
+import asyncio
 from inference_sdk import InferenceHTTPClient
 
-# Load environment variables
-load_dotenv()
+from config import ROBOFLOW_API_KEY, ROBOFLOW_API_URL
+from models import YouTubeRequest
+from cache import get_cache_file, load_from_cache, save_to_cache
+from video_processor import analyze_video_frames
+from youtube_service import validate_youtube_video, download_youtube_video
 
 app = FastAPI()
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development, allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize client - works with free plan by running on Roboflow servers
+# Initialize Roboflow client
 CLIENT = InferenceHTTPClient(
-    api_url="https://detect.roboflow.com",
-    api_key=os.environ.get("ROBOFLOW_API_KEY")
+    api_url=ROBOFLOW_API_URL,
+    api_key=ROBOFLOW_API_KEY
 )
-
-ROBOFLOW_MODEL_ID = os.environ.get(
-    "ROBOFLOW_MODEL_ID", "people-detection-o4rdr/1"
-)
-FRAME_INTERVAL_SECONDS = float(os.environ.get("FRAME_INTERVAL_SECONDS", "1"))
-MOTION_THRESHOLD = float(os.environ.get("MOTION_THRESHOLD", "15"))
-
-CACHE_DIR = Path("cache")
-CACHE_DIR.mkdir(exist_ok=True)
-
-class YouTubeRequest(BaseModel):
-    url: str
-
-def get_file_hash(file_path: str) -> str:
-    """Calculate SHA256 hash of a file."""
-    sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
-
-def determine_stride(fps: float) -> int:
-    """Return frame stride based on a fixed sampling interval."""
-    return max(1, int(fps * FRAME_INTERVAL_SECONDS))
-
-def has_significant_motion(current_frame, previous_frame) -> bool:
-    """Simple frame-diff motion gating."""
-    if previous_frame is None:
-        return True
-    gray_current = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-    gray_previous = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
-    diff = cv2.absdiff(gray_current, gray_previous)
-    score = float(np.mean(diff))
-    return score >= MOTION_THRESHOLD
-
-async def process_video_analysis_stream(file_path: str, api_key: str):
-    """Generator that yields progress updates and final result."""
-    CLIENT.api_key = api_key
-
-    # 1. Calculate Hash
-    yield json.dumps({"status": "hashing", "progress": 0}) + "\n"
-    file_hash = get_file_hash(file_path)
-    cache_file = CACHE_DIR / f"{file_hash}.csv"
-
-    # 2. Check Cache
-    if cache_file.exists():
-        yield json.dumps({"status": "cached", "progress": 100}) + "\n"
-        df = pd.read_csv(cache_file)
-        result = df.to_dict(orient="records")
-        yield json.dumps({"status": "complete", "data": result}) + "\n"
-        return
-
-    # 3. Run Analysis
-    yield json.dumps({"status": "analyzing", "progress": 0}) + "\n"
-    video_info = sv.VideoInfo.from_video_path(file_path)
-
-    timeline = []
-    fps = video_info.fps
-    stride = determine_stride(fps)
-    total_frames = video_info.total_frames
-
-    frame_generator = sv.get_video_frames_generator(file_path)
-    previous_frame = None
-    last_count = 0
-
-    for i, frame in enumerate(frame_generator):
-        if i % stride != 0:
-            continue
-
-        # Yield progress update
-        if i % (stride * 5) == 0: # Update every 5 strides (~10s video time)
-            progress = int((i / total_frames) * 100)
-            yield json.dumps({"status": "analyzing", "progress": progress}) + "\n"
-            # Small sleep to allow event loop to process other things if needed
-            await asyncio.sleep(0)
-
-        timestamp = i / fps
-        motion_detected = has_significant_motion(frame, previous_frame)
-        previous_frame = frame
-
-        if motion_detected:
-            result = CLIENT.infer(
-                frame,
-                model_id=ROBOFLOW_MODEL_ID,
-            )
-            detections = sv.Detections.from_inference(result)
-            detections = detections[detections.class_id == 0]
-            last_count = len(detections)
-
-        timeline.append({
-            "timestamp": float(f"{timestamp:.2f}"),
-            "count": last_count
-        })
-
-    # 4. Save to Cache
-    df = pd.DataFrame(timeline)
-    df.to_csv(cache_file, index=False)
-
-    yield json.dumps({"status": "complete", "data": timeline}) + "\n"
 
 @app.post("/analyze_youtube_stream")
 async def analyze_youtube_stream(request: YouTubeRequest):
-    api_key = os.environ.get("ROBOFLOW_API_KEY")
-    if not api_key:
+    """Stream analysis progress and results for a YouTube video."""
+    if not ROBOFLOW_API_KEY:
         raise HTTPException(status_code=500, detail="ROBOFLOW_API_KEY not set")
 
     async def event_generator():
-        temp_path = None
         try:
+            # Step 1: Validate YouTube video
             yield json.dumps({"status": "checking_url", "progress": 0}) + "\n"
 
             loop = asyncio.get_event_loop()
-            def check_video():
-                try:
-                    # 1. Fast check: Is the video embeddable?
-                    # The most reliable way without API key is to check the oembed endpoint.
-                    # YouTube's oembed endpoint returns 401/403 or missing html if not embeddable.
-                    oembed_url = f"https://www.youtube.com/oembed?url={request.url}&format=json"
-                    r = requests.get(oembed_url)
-                    if r.status_code != 200:
-                        return {"error": "Video is not embeddable or unavailable."}
-
-                    # 2. yt-dlp check for downloadability
-                    with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
-                        info = ydl.extract_info(request.url, download=False)
-                        return info
-                except Exception as e:
-                    return None
-
-            video_info = await loop.run_in_executor(None, check_video)
+            video_info = await loop.run_in_executor(
+                None,
+                validate_youtube_video,
+                request.url
+            )
 
             if not video_info or video_info.get('error'):
                 error_msg = video_info.get('error', "Video unavailable, private, or restricted.") if video_info else "Video unavailable."
                 yield json.dumps({"status": "error", "error": error_msg}) + "\n"
                 return
 
-            # Check if video is live stream
             if video_info.get('is_live'):
-                 yield json.dumps({"status": "error", "error": "Live streams are not supported."}) + "\n"
-                 return
-
-            # 2. Calculate Hash (using Video ID to avoid re-downloading)
-            video_id = video_info.get('id')
-            cache_file_name = f"yt_{video_id}.csv"
-            cache_file = CACHE_DIR / cache_file_name
-
-            if cache_file.exists():
-                yield json.dumps({"status": "cached", "progress": 100}) + "\n"
-                df = pd.read_csv(cache_file)
-                result = df.to_dict(orient="records")
-                yield json.dumps({"status": "complete", "data": result}) + "\n"
+                yield json.dumps({"status": "error", "error": "Live streams are not supported."}) + "\n"
                 return
 
-            # 3. Download (if not cached)
+            # Step 2: Check cache using video ID
+            video_id = video_info.get('id')
+            cache_file = get_cache_file(video_id, prefix="yt_")
+
+            cached_result = load_from_cache(cache_file)
+            if cached_result:
+                yield json.dumps({"status": "cached", "progress": 100}) + "\n"
+                yield json.dumps({"status": "complete", "data": cached_result}) + "\n"
+                return
+
+            # Step 3: Download video
             yield json.dumps({"status": "downloading", "progress": 0}) + "\n"
 
             with tempfile.TemporaryDirectory() as temp_dir:
-                ydl_opts = {
-                    'format': 'best[ext=mp4]/best',
-                    'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
-                    'quiet': True,
-                    'no_warnings': True
-                }
+                temp_path = await loop.run_in_executor(
+                    None,
+                    download_youtube_video,
+                    request.url,
+                    temp_dir
+                )
 
-                def download():
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(request.url, download=True)
-                        return ydl.prepare_filename(info)
-
-                temp_path = await loop.run_in_executor(None, download)
-
-                # 4. Run Analysis logic
+                # Step 4: Analyze video frames
                 yield json.dumps({"status": "analyzing", "progress": 0}) + "\n"
-                video_info_sv = sv.VideoInfo.from_video_path(temp_path)
 
+                CLIENT.api_key = ROBOFLOW_API_KEY
                 timeline = []
-                fps = video_info_sv.fps
-                stride = determine_stride(fps)
-                total_frames = video_info_sv.total_frames
 
-                frame_generator = sv.get_video_frames_generator(temp_path)
-                previous_frame = None
-                last_count = 0
+                for data_point in analyze_video_frames(temp_path, CLIENT):
+                    frame_index = data_point.pop('frame_index')
+                    total_frames = data_point.pop('total_frames')
 
-                for i, frame in enumerate(frame_generator):
-                    if i % stride != 0:
-                        continue
-
-                    if i % (stride * 5) == 0:
-                        progress = int((i / total_frames) * 100)
+                    # Yield progress every ~5 intervals
+                    if len(timeline) % 5 == 0:
+                        progress = int((frame_index / total_frames) * 100)
                         yield json.dumps({"status": "analyzing", "progress": progress}) + "\n"
                         await asyncio.sleep(0)
 
-                    timestamp = i / fps
-                    motion_detected = has_significant_motion(frame, previous_frame)
-                    previous_frame = frame
+                    timeline.append(data_point)
 
-                    if motion_detected:
-                        result = CLIENT.infer(
-                            frame,
-                            model_id=ROBOFLOW_MODEL_ID,
-                        )
-                        detections = sv.Detections.from_inference(result)
-                        detections = detections[detections.class_id == 0]
-                        last_count = len(detections)
-
-                    timeline.append({
-                        "timestamp": float(f"{timestamp:.2f}"),
-                        "count": last_count
-                    })
-
-                # Save to Cache
-                df = pd.DataFrame(timeline)
-                df.to_csv(cache_file, index=False)
-
+                # Step 5: Save to cache and return
+                save_to_cache(cache_file, timeline)
                 yield json.dumps({"status": "complete", "data": timeline}) + "\n"
 
         except Exception as e:
             yield json.dumps({"status": "error", "error": str(e)}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
-
-def process_video_analysis(file_path: str, api_key: str) -> List[Dict]:
-    # ... (Kept for backward compatibility if needed, essentially duplicate logic but blocking)
-    pass
-
-@app.post("/analyze_video")
-async def analyze_video(file: UploadFile = File(...)) -> List[Dict]:
-    # Placeholder for legacy support or removal
-    if not file.filename.endswith(('.mp4', '.avi', '.mov')):
-        raise HTTPException(status_code=400, detail="Invalid file format")
-    return []
 
 if __name__ == "__main__":
     import uvicorn

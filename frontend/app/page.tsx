@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import StatsCards from "@/components/StatsCards";
 import CrowdDensityChart from "@/components/CrowdDensityChart";
-import { Activity, Youtube, PlayCircle } from "lucide-react";
+import { Activity, Youtube, PlayCircle, AlertCircle } from "lucide-react";
 import YouTube, { YouTubeEvent } from "react-youtube";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface AnalysisResult {
   timestamp: number;
@@ -39,7 +40,6 @@ export default function Home() {
     setData(null);
     setProgress("Initializing analysis...");
 
-    // Cancel previous request if any
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -47,7 +47,6 @@ export default function Home() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Extract Video ID
     let vidId = "";
     try {
       const urlObj = new URL(youtubeUrl);
@@ -94,7 +93,6 @@ export default function Home() {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line);
-            console.log("Event:", event); // Debug log
 
             if (event.status === "hashing") setProgress("Preparing video...");
             if (event.status === "checking_url")
@@ -125,18 +123,15 @@ export default function Home() {
         console.error(err);
       }
     } finally {
-      // Only set processing to false if we didn't abort (abort handles its own state)
       if (abortControllerRef.current === abortController) {
         setIsProcessing(false);
       }
     }
   };
 
-  // Chart Click Handler
   const onChartClick = (data: any) => {
     if (data && data.activePayload && playerRef.current) {
       const timestamp = data.activePayload[0].payload.timestamp;
-      // seekTo expects seconds
       playerRef.current.internalPlayer.seekTo(timestamp, true);
     }
   };
@@ -145,17 +140,14 @@ export default function Home() {
     playerRef.current = event.target;
   };
 
-  // Calculate stats from data
   const getStats = () => {
     if (!data || data.length === 0) return null;
 
     const counts = data.map((d) => d.count);
     const maxCount = Math.max(...counts);
     const avgCount = counts.reduce((a, b) => a + b, 0) / counts.length;
-
     const peakIndex = counts.indexOf(maxCount);
     const peakTimeData = data[peakIndex];
-
     const duration = data[data.length - 1].timestamp;
 
     const formatTime = (seconds: number) => {
@@ -175,34 +167,30 @@ export default function Home() {
   const stats = getStats();
 
   return (
-    <main className="min-h-screen bg-slate-900 text-white font-sans selection:bg-purple-500 selection:text-white">
-      {/* Background Gradients */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/20 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[120px]" />
-      </div>
-
+    <main className="min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground transition-colors duration-300">
       <div className="relative z-10 max-w-7xl mx-auto p-8 space-y-12">
         {/* Header */}
-        <header className="flex flex-col items-center text-center space-y-4 pt-12">
-          <div className="p-4 bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 shadow-2xl mb-4">
-            <Activity className="w-12 h-12 text-purple-400" />
+        <header className="flex flex-col items-center text-center space-y-4 pt-12 relative">
+          <div className="absolute top-0 right-0 md:top-4 md:right-4 z-50">
+            <ThemeToggle />
           </div>
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent pb-2">
+
+          <div className="p-4 bg-card/50 backdrop-blur-sm rounded-2xl border border-border shadow-sm mb-4">
+            <Activity className="w-12 h-12 text-primary" />
+          </div>
+          <h1 className="text-5xl md:text-6xl font-serif font-bold tracking-tight text-foreground pb-2">
             Crowd Flow Analytics
           </h1>
-          <p className="text-lg text-slate-400 max-w-2xl">
+          <p className="text-lg text-muted-foreground max-w-2xl font-sans">
             Real-time AI crowd density analysis powered by{" "}
-            <span className="text-white font-semibold">Roboflow Inference</span>{" "}
-            & <span className="text-white font-semibold">YOLO11</span>.
+            <span className="text-primary font-bold">Roboflow Inference</span> &{" "}
+            <span className="text-primary font-bold">YOLO11</span>.
           </p>
         </header>
 
         {/* Input Section */}
         <div className="max-w-3xl mx-auto w-full">
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden group hover:border-white/20 transition-all duration-500">
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
+          <div className="bg-card border border-border rounded-xl p-8 shadow-lg relative overflow-hidden transition-all duration-500">
             <form
               onSubmit={handleYoutubeSubmit}
               className="relative z-10 space-y-6"
@@ -210,19 +198,19 @@ export default function Home() {
               <div className="space-y-2">
                 <label
                   htmlFor="youtube-url"
-                  className="text-sm font-bold text-slate-300 uppercase tracking-wider ml-1"
+                  className="text-sm font-bold text-muted-foreground uppercase tracking-wider ml-1"
                 >
                   YouTube Video URL
                 </label>
                 <div className="relative group/input">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Youtube className="h-5 w-5 text-slate-500 group-focus-within/input:text-red-500 transition-colors" />
+                    <Youtube className="h-5 w-5 text-muted-foreground group-focus-within/input:text-primary transition-colors" />
                   </div>
                   <input
                     id="youtube-url"
                     type="url"
-                    placeholder="Paste YouTube link here (e.g. https://youtube.com/watch?v=...)"
-                    className="w-full pl-12 pr-4 py-4 bg-slate-950/50 border border-white/10 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-slate-500 outline-none transition-all shadow-inner text-lg"
+                    placeholder="Paste YouTube link here..."
+                    className="w-full pl-12 pr-4 py-4 bg-input/20 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent text-foreground placeholder-muted-foreground outline-none transition-all shadow-inner text-lg font-mono"
                     value={youtubeUrl}
                     onChange={(e) => setYoutubeUrl(e.target.value)}
                     disabled={isProcessing}
@@ -230,50 +218,52 @@ export default function Home() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isProcessing || !youtubeUrl}
-                className={`flex-1 py-4 px-6 rounded-xl font-bold text-lg tracking-wide shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2
-                    ${
-                      isProcessing || !youtubeUrl
-                        ? "bg-slate-700 text-slate-500 cursor-not-allowed"
-                        : "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white shadow-purple-500/25"
-                    }`}
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Analyzing...</span>
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="w-5 h-5" />
-                    <span>Run Analysis</span>
-                  </>
-                )}
-              </button>
-
-              {isProcessing && (
+              <div className="flex gap-4">
                 <button
-                  type="button"
-                  onClick={handleAbort}
-                  className="px-6 py-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl font-bold hover:bg-red-500/20 transition-colors"
+                  type="submit"
+                  disabled={isProcessing || !youtubeUrl}
+                  className={`flex-1 py-4 px-6 rounded-lg font-bold text-lg tracking-wide shadow-md transition-all transform hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2
+                       ${
+                         isProcessing || !youtubeUrl
+                           ? "bg-muted text-muted-foreground cursor-not-allowed"
+                           : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
+                       }`}
                 >
-                  Stop
+                  {isProcessing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="w-5 h-5" />
+                      <span>Run Analysis</span>
+                    </>
+                  )}
                 </button>
-              )}
+
+                {isProcessing && (
+                  <button
+                    type="button"
+                    onClick={handleAbort}
+                    className="px-6 py-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg font-bold hover:bg-destructive/20 transition-colors"
+                  >
+                    Stop
+                  </button>
+                )}
+              </div>
             </form>
 
             {/* Progress Indicator */}
             {isProcessing && (
               <div className="mt-6 space-y-2">
-                <div className="flex justify-between text-xs font-medium text-purple-300">
+                <div className="flex justify-between text-xs font-medium text-primary">
                   <span>Status</span>
-                  <span className="animate-pulse text-white">{progress}</span>
+                  <span className="animate-pulse font-mono">{progress}</span>
                 </div>
-                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-purple-500 transition-all duration-300 ease-out"
+                    className="h-full bg-primary transition-all duration-300 ease-out"
                     style={{
                       width: progress.includes("%")
                         ? progress.split(":")[1]
@@ -287,8 +277,14 @@ export default function Home() {
         </div>
 
         {error && (
-          <div className="max-w-3xl mx-auto p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-center font-medium animate-in fade-in slide-in-from-top-4">
-            {error}
+          <div className="max-w-3xl mx-auto p-6 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl text-center font-medium animate-in fade-in slide-in-from-top-4 shadow-sm backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <AlertCircle className="w-10 h-10 opacity-80" />
+              <span className="text-lg">{error}</span>
+              <p className="text-sm opacity-70 font-normal">
+                Please try a different public YouTube video link.
+              </p>
+            </div>
           </div>
         )}
 
@@ -299,12 +295,12 @@ export default function Home() {
 
             <div className="grid lg:grid-cols-3 gap-8 h-[500px]">
               {/* Chart Section */}
-              <div className="lg:col-span-2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-xl">
+              <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6 shadow-lg">
                 <CrowdDensityChart data={data} onClick={onChartClick} />
               </div>
 
               {/* Video Player */}
-              <div className="lg:col-span-1 bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative group">
+              <div className="lg:col-span-1 bg-black rounded-xl overflow-hidden shadow-lg border border-border relative group">
                 {videoId ? (
                   <YouTube
                     videoId={videoId}
@@ -322,7 +318,7 @@ export default function Home() {
                     onReady={onPlayerReady}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-slate-500">
+                  <div className="flex items-center justify-center h-full text-muted-foreground font-mono">
                     No Video Loaded
                   </div>
                 )}

@@ -21,32 +21,32 @@ export default function StatsCards({
       value: maxCount.toString(),
       subtext: "People at once",
       icon: Users,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
+      color: "text-primary",
+      bg: "bg-primary/10",
     },
     {
       label: "Average Density",
       value: avgCount.toFixed(1),
       subtext: "People per frame",
       icon: Activity,
-      color: "text-emerald-600",
-      bg: "bg-emerald-100",
+      color: "text-chart-2",
+      bg: "bg-chart-2/10",
     },
     {
       label: "Peak Time",
       value: peakTime,
       subtext: "High congestion",
       icon: Clock,
-      color: "text-amber-600",
-      bg: "bg-amber-100",
+      color: "text-chart-3",
+      bg: "bg-chart-3/10",
     },
     {
       label: "Duration",
       value: duration,
       subtext: "Analyzed footage",
       icon: TrendingUp,
-      color: "text-purple-600",
-      bg: "bg-purple-100",
+      color: "text-chart-4",
+      bg: "bg-chart-4/10",
     },
   ];
 
@@ -55,15 +55,19 @@ export default function StatsCards({
       {stats.map((stat, index) => (
         <div
           key={index}
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+          className="bg-card p-6 rounded-xl shadow-sm border border-border hover:shadow-md transition-shadow"
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">{stat.label}</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-muted-foreground font-sans">
+                {stat.label}
+              </p>
+              <h3 className="text-2xl font-bold text-card-foreground mt-2 font-serif">
                 {stat.value}
               </h3>
-              <p className="text-xs text-gray-400 mt-1">{stat.subtext}</p>
+              <p className="text-xs text-muted-foreground/70 mt-1 font-mono">
+                {stat.subtext}
+              </p>
             </div>
             <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
               <stat.icon className="w-5 h-5" />

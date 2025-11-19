@@ -26,7 +26,17 @@ const formatTime = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-// ... (CustomTooltip remains the same)
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-popover p-3 border border-border shadow-lg rounded-lg">
+        <p className="text-sm font-medium text-muted-foreground font-mono">{`Time: ${label}`}</p>
+        <p className="text-sm font-bold text-primary font-serif">{`People: ${payload[0].value}`}</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function CrowdDensityChart({
   data,
@@ -42,10 +52,10 @@ export default function CrowdDensityChart({
   return (
     <div className="w-full h-full">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-bold text-slate-200">
+        <h3 className="text-lg font-bold text-card-foreground font-serif">
           Crowd Density over Time
         </h3>
-        <span className="text-xs font-medium text-slate-500 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+        <span className="text-xs font-medium text-muted-foreground px-3 py-1 bg-muted/50 rounded-full border border-border font-mono">
           Click chart to seek video
         </span>
       </div>
@@ -62,45 +72,50 @@ export default function CrowdDensityChart({
         >
           <defs>
             <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#a855f7" stopOpacity={0.5} />
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.5} />
+              <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid
             strokeDasharray="3 3"
             vertical={false}
-            stroke="rgba(255,255,255,0.1)"
+            stroke="var(--border)"
+            strokeOpacity={0.5}
           />
           <XAxis
             dataKey="timeLabel"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
+            tick={{
+              fill: "var(--muted-foreground)",
+              fontSize: 12,
+              fontFamily: "var(--font-mono)",
+            }}
             dy={10}
           />
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#1e293b",
-              borderColor: "rgba(255,255,255,0.1)",
-              borderRadius: "12px",
-              color: "#fff",
+            tick={{
+              fill: "var(--muted-foreground)",
+              fontSize: 12,
+              fontFamily: "var(--font-mono)",
             }}
-            itemStyle={{ color: "#fff" }}
-            cursor={{ stroke: "rgba(255,255,255,0.2)", strokeWidth: 2 }}
           />
+          <Tooltip content={<CustomTooltip />} />
           <Area
             type="monotone"
             dataKey="count"
-            stroke="#a855f7"
+            stroke="var(--primary)"
             strokeWidth={3}
             fillOpacity={1}
             fill="url(#colorCount)"
-            activeDot={{ r: 6, strokeWidth: 0, fill: "#fff" }}
+            activeDot={{
+              r: 6,
+              strokeWidth: 0,
+              fill: "var(--background)",
+              stroke: "var(--primary)",
+            }}
           />
         </AreaChart>
       </ResponsiveContainer>

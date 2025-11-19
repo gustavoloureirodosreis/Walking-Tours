@@ -1,11 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import cv2
-import numpy as np
 import tempfile
 import os
-from inference import get_model
 import supervision as sv
 from typing import List, Dict
 import hashlib
@@ -39,6 +36,12 @@ CLIENT = InferenceHTTPClient(
     api_key=os.environ.get("ROBOFLOW_API_KEY")
 )
 
+ROBOFLOW_MODEL_ID = os.environ.get(
+    "ROBOFLOW_MODEL_ID", "leo-ueno/people-detection-o4rdr/1"
+)
+ROBOFLOW_CONFIDENCE = float(os.environ.get("ROBOFLOW_CONFIDENCE", "0.2"))
+FRAME_INTERVAL_SECONDS = float(os.environ.get("FRAME_INTERVAL_SECONDS", "1"))
+
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
@@ -52,6 +55,10 @@ def get_file_hash(file_path: str) -> str:
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
+
+def determine_stride(fps: float) -> int:
+    """Return frame stride based on a fixed sampling interval."""
+    return max(1, int(fps * FRAME_INTERVAL_SECONDS))
 
 async def process_video_analysis_stream(file_path: str, api_key: str):
     """Generator that yields progress updates and final result."""
@@ -76,8 +83,7 @@ async def process_video_analysis_stream(file_path: str, api_key: str):
 
     timeline = []
     fps = video_info.fps
-    stride = int(fps * 2)
-    if stride < 1: stride = 1
+    stride = determine_stride(fps)
     total_frames = video_info.total_frames
 
     frame_generator = sv.get_video_frames_generator(file_path)
@@ -93,7 +99,11 @@ async def process_video_analysis_stream(file_path: str, api_key: str):
             # Small sleep to allow event loop to process other things if needed
             await asyncio.sleep(0)
 
-        result = CLIENT.infer(frame, model_id="coco/3")
+        result = CLIENT.infer(
+            frame,
+            model_id=ROBOFLOW_MODEL_ID,
+            confidence=ROBOFLOW_CONFIDENCE,
+        )
         detections = sv.Detections.from_inference(result)
         detections = detections[detections.class_id == 0]
 
@@ -186,8 +196,7 @@ async def analyze_youtube_stream(request: YouTubeRequest):
 
                 timeline = []
                 fps = video_info_sv.fps
-                stride = int(fps * 2)
-                if stride < 1: stride = 1
+                stride = determine_stride(fps)
                 total_frames = video_info_sv.total_frames
 
                 frame_generator = sv.get_video_frames_generator(temp_path)
@@ -201,7 +210,11 @@ async def analyze_youtube_stream(request: YouTubeRequest):
                         yield json.dumps({"status": "analyzing", "progress": progress}) + "\n"
                         await asyncio.sleep(0)
 
-                    result = CLIENT.infer(frame, model_id="coco/3")
+                    result = CLIENT.infer(
+                        frame,
+                        model_id=ROBOFLOW_MODEL_ID,
+                        confidence=ROBOFLOW_CONFIDENCE,
+                    )
                     detections = sv.Detections.from_inference(result)
                     detections = detections[detections.class_id == 0]
 

@@ -39,9 +39,8 @@ CLIENT = InferenceHTTPClient(
 )
 
 ROBOFLOW_MODEL_ID = os.environ.get(
-    "ROBOFLOW_MODEL_ID", "leo-ueno/people-detection-o4rdr/1"
+    "ROBOFLOW_MODEL_ID", "people-detection-o4rdr/1"
 )
-ROBOFLOW_CONFIDENCE = float(os.environ.get("ROBOFLOW_CONFIDENCE", "0.2"))
 FRAME_INTERVAL_SECONDS = float(os.environ.get("FRAME_INTERVAL_SECONDS", "1"))
 MOTION_THRESHOLD = float(os.environ.get("MOTION_THRESHOLD", "15"))
 
@@ -122,7 +121,6 @@ async def process_video_analysis_stream(file_path: str, api_key: str):
             result = CLIENT.infer(
                 frame,
                 model_id=ROBOFLOW_MODEL_ID,
-                confidence=ROBOFLOW_CONFIDENCE,
             )
             detections = sv.Detections.from_inference(result)
             detections = detections[detections.class_id == 0]
@@ -240,7 +238,6 @@ async def analyze_youtube_stream(request: YouTubeRequest):
                         result = CLIENT.infer(
                             frame,
                             model_id=ROBOFLOW_MODEL_ID,
-                            confidence=ROBOFLOW_CONFIDENCE,
                         )
                         detections = sv.Detections.from_inference(result)
                         detections = detections[detections.class_id == 0]

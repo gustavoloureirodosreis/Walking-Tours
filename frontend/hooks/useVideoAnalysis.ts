@@ -1,9 +1,5 @@
 import { useState, useRef } from "react";
-
-interface AnalysisResult {
-    timestamp: number;
-    count: number;
-}
+import type { AnalysisResult } from "@/lib/stats";
 
 interface UseVideoAnalysisReturn {
     data: AnalysisResult[] | null;
@@ -15,6 +11,24 @@ interface UseVideoAnalysisReturn {
 }
 
 const API_URL = "http://localhost:8000/analyze_youtube_stream";
+
+type StreamEvent =
+    | {
+        status: "hashing" | "checking_url" | "downloading" | "cached";
+        progress?: number;
+    }
+    | {
+        status: "analyzing";
+        progress: number;
+    }
+    | {
+        status: "complete";
+        data: AnalysisResult[];
+    }
+    | {
+        status: "error";
+        error: string;
+    };
 
 /**
  * Custom hook to handle video analysis with streaming updates.
@@ -85,11 +99,15 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
                     }
                 }
             }
-        } catch (err: any) {
-            if (err.name === "AbortError") {
+        } catch (err) {
+            const error = err as Partial<Error>;
+            if (error?.name === "AbortError") {
                 console.log("Request aborted");
+            } else if (error?.message) {
+                setError(error.message);
+                console.error(err);
             } else {
-                setError(err.message || "Failed to analyze YouTube video.");
+                setError("Failed to analyze YouTube video.");
                 console.error(err);
             }
         } finally {
@@ -113,7 +131,7 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
  * Handle individual stream events and update state accordingly.
  */
 function handleStreamEvent(
-    event: any,
+    event: StreamEvent,
     setProgress: (progress: string) => void,
     setData: (data: AnalysisResult[]) => void
 ) {

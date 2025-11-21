@@ -3,8 +3,9 @@ import cv2
 import numpy as np
 import supervision as sv
 from typing import Generator, Dict, Any
-from inference_sdk import InferenceHTTPClient
-from config import FRAME_INTERVAL_SECONDS, MOTION_THRESHOLD, ROBOFLOW_MODEL_ID
+
+from config import FRAME_INTERVAL_SECONDS, MOTION_THRESHOLD
+from sam3_service import Sam3Analyzer
 
 def determine_stride(fps: float) -> int:
     """Calculate frame stride based on sampling interval."""
@@ -24,7 +25,7 @@ def has_significant_motion(current_frame, previous_frame) -> bool:
 
 def analyze_video_frames(
     file_path: str,
-    client: InferenceHTTPClient
+    analyzer: Sam3Analyzer,
 ) -> Generator[Dict[str, Any], None, None]:
     """
     Analyze video frames and yield timeline data points.
@@ -37,7 +38,7 @@ def analyze_video_frames(
 
     frame_generator = sv.get_video_frames_generator(file_path)
     previous_frame = None
-    last_count = 0
+    last_counts = {"men": 0, "women": 0, "total": 0}
 
     for i, frame in enumerate(frame_generator):
         if i % stride != 0:
@@ -48,14 +49,25 @@ def analyze_video_frames(
         previous_frame = frame
 
         if motion_detected:
-            result = client.infer(frame, model_id=ROBOFLOW_MODEL_ID)
-            detections = sv.Detections.from_inference(result)
-            detections = detections[detections.class_id == 0]
-            last_count = len(detections)
+            predictions = analyzer.analyze_frame(frame)
+
+            def _count_for(*keys: str) -> int:
+                for key in keys:
+                    if key in predictions:
+                        return int(predictions[key])
+                return 0
+
+            men = _count_for("men", "man")
+            women = _count_for("women", "woman")
+            total = predictions.get("total")
+            total_count = int(total) if total is not None else men + women
+            last_counts = {"men": men, "women": women, "total": total_count}
 
         yield {
             "timestamp": float(f"{timestamp:.2f}"),
-            "count": last_count,
+            "men": last_counts["men"],
+            "women": last_counts["women"],
+            "total": last_counts["total"],
             "frame_index": i,
             "total_frames": video_info.total_frames
         }

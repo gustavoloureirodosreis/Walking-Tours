@@ -1,17 +1,21 @@
 """FastAPI application for crowd density analysis."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import tempfile
 import json
 import asyncio
-from inference_sdk import InferenceHTTPClient
 
-from config import ROBOFLOW_API_KEY, ROBOFLOW_API_URL
 from models import YouTubeRequest
 from cache import get_cache_file, load_from_cache, save_to_cache
 from video_processor import analyze_video_frames
 from youtube_service import validate_youtube_video, download_youtube_video
+from config import CACHE_VERSION
+from sam3_service import (
+    get_sam3_service,
+    Sam3InitializationError,
+    Sam3InferenceError,
+)
 
 app = FastAPI()
 
@@ -24,20 +28,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Roboflow client
-CLIENT = InferenceHTTPClient(
-    api_url=ROBOFLOW_API_URL,
-    api_key=ROBOFLOW_API_KEY
-)
+SAM3_SERVICE = None
+SAM3_INIT_ERROR = None
+
+
+@app.on_event("startup")
+async def load_sam3():
+    global SAM3_SERVICE, SAM3_INIT_ERROR
+    try:
+        SAM3_SERVICE = get_sam3_service()
+        SAM3_INIT_ERROR = None
+    except Sam3InitializationError as exc:
+        SAM3_INIT_ERROR = str(exc)
 
 @app.post("/analyze_youtube_stream")
 async def analyze_youtube_stream(request: YouTubeRequest):
     """Stream analysis progress and results for a YouTube video."""
-    if not ROBOFLOW_API_KEY:
-        raise HTTPException(status_code=500, detail="ROBOFLOW_API_KEY not set")
-
     async def event_generator():
         try:
+            if SAM3_INIT_ERROR:
+                yield json.dumps({"status": "error", "error": SAM3_INIT_ERROR}) + "\n"
+                return
+
+            if SAM3_SERVICE is None:
+                yield json.dumps(
+                    {
+                        "status": "error",
+                        "error": "SAM3 service not ready. Please restart the server.",
+                    }
+                ) + "\n"
+                return
+
             # Step 1: Validate YouTube video
             yield json.dumps({"status": "checking_url", "progress": 0}) + "\n"
 
@@ -59,7 +80,7 @@ async def analyze_youtube_stream(request: YouTubeRequest):
 
             # Step 2: Check cache using video ID
             video_id = video_info.get('id')
-            cache_file = get_cache_file(video_id, prefix="yt_")
+            cache_file = get_cache_file(video_id, prefix=f"{CACHE_VERSION}_yt_")
 
             cached_result = load_from_cache(cache_file)
             if cached_result:
@@ -81,10 +102,9 @@ async def analyze_youtube_stream(request: YouTubeRequest):
                 # Step 4: Analyze video frames
                 yield json.dumps({"status": "analyzing", "progress": 0}) + "\n"
 
-                CLIENT.api_key = ROBOFLOW_API_KEY
                 timeline = []
 
-                for data_point in analyze_video_frames(temp_path, CLIENT):
+                for data_point in analyze_video_frames(temp_path, SAM3_SERVICE):
                     frame_index = data_point.pop('frame_index')
                     total_frames = data_point.pop('total_frames')
 
@@ -100,6 +120,8 @@ async def analyze_youtube_stream(request: YouTubeRequest):
                 save_to_cache(cache_file, timeline)
                 yield json.dumps({"status": "complete", "data": timeline}) + "\n"
 
+        except Sam3InferenceError as exc:
+            yield json.dumps({"status": "error", "error": str(exc)}) + "\n"
         except Exception as e:
             yield json.dumps({"status": "error", "error": str(e)}) + "\n"
 

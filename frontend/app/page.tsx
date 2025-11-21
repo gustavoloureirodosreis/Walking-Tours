@@ -51,11 +51,11 @@ export default function Home() {
             Crowd Flow Analytics
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl font-sans">
-            Real-time AI crowd density analysis powered by{" "}
-            <span className="text-primary font-bold">Roboflow Inference</span>{" "}
-            using a{" "}
-            <span className="text-primary font-bold">People Detection</span>{" "}
-            model.
+            Real-time crowd analytics powered by{" "}
+            <span className="text-primary font-bold">SAM&nbsp;3</span> running
+            locally. Track{" "}
+            <span className="text-primary font-bold">men vs. women</span> counts
+            across YouTube footage without paying for hosted inference.
           </p>
         </header>
 

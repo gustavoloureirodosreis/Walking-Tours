@@ -1,50 +1,45 @@
 "use client";
 
 import { Users, Activity, Clock, TrendingUp } from "lucide-react";
+import type { VideoStats } from "@/lib/stats";
 
-interface StatsCardsProps {
-  maxCount: number;
-  avgCount: number;
-  peakTime: string;
-  duration: string;
-}
-
-export default function StatsCards({
-  maxCount,
-  avgCount,
-  peakTime,
-  duration,
-}: StatsCardsProps) {
+export default function StatsCards(statsSummary: VideoStats) {
   const stats = [
     {
-      label: "Peak Crowd Density",
-      value: maxCount.toString(),
-      subtext: "People at once",
+      label: "Peak Crowd (men + women)",
+      value: statsSummary.peakTotal.toString(),
+      subtext: `@ ${
+        statsSummary.peakTotalTime
+      } • avg ${statsSummary.avgTotal.toFixed(1)}`,
       icon: Users,
       color: "text-primary",
       bg: "bg-primary/10",
     },
     {
-      label: "Average Density",
-      value: avgCount.toFixed(1),
-      subtext: "People per frame",
+      label: "Peak Men",
+      value: statsSummary.peakMen.toString(),
+      subtext: `@ ${
+        statsSummary.peakMenTime
+      } • avg ${statsSummary.avgMen.toFixed(1)}`,
       icon: Activity,
       color: "text-chart-2",
       bg: "bg-chart-2/10",
     },
     {
-      label: "Peak Time",
-      value: peakTime,
-      subtext: "High congestion",
-      icon: Clock,
+      label: "Peak Women",
+      value: statsSummary.peakWomen.toString(),
+      subtext: `@ ${
+        statsSummary.peakWomenTime
+      } • avg ${statsSummary.avgWomen.toFixed(1)}`,
+      icon: TrendingUp,
       color: "text-chart-3",
       bg: "bg-chart-3/10",
     },
     {
       label: "Duration",
-      value: duration,
+      value: statsSummary.duration,
       subtext: "Analyzed footage",
-      icon: TrendingUp,
+      icon: Clock,
       color: "text-chart-4",
       bg: "bg-chart-4/10",
     },

@@ -51,3 +51,5 @@ Visit `http://localhost:3000`.
 - The legacy FastAPI/SAM3 backend has been removed per the new requirements.
 - All heavy lifting (upload, ffmpeg, Roboflow calls) happens on the server so
   the API key never ships to the browser.
+
+<!-- "people walking background video" good query for background video on youtube -->

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Upload, FileVideo, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload } from "lucide-react";
 import clsx from "clsx";
 
 interface UploadZoneProps {

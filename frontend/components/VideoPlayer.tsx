@@ -30,14 +30,14 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
     if (!videoId) {
       return (
-        <div className="lg:col-span-1 bg-black rounded-xl overflow-hidden shadow-lg border border-border relative group flex items-center justify-center h-full">
+        <div className="bg-black rounded-xl overflow-hidden shadow-lg border border-border relative group flex items-center justify-center h-full">
           <div className="text-muted-foreground font-mono">No Video Loaded</div>
         </div>
       );
     }
 
     return (
-      <div className="lg:col-span-1 bg-black rounded-xl overflow-hidden shadow-lg border border-border relative group">
+      <div className="bg-black rounded-xl overflow-hidden shadow-lg border border-border relative group h-full">
         <YouTube
           videoId={videoId}
           opts={{

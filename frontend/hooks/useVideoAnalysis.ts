@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
+
 import type { AnalysisResult } from "@/lib/stats";
 
 interface UseVideoAnalysisReturn {
@@ -6,33 +7,12 @@ interface UseVideoAnalysisReturn {
     isProcessing: boolean;
     error: string | null;
     progress: string;
-    analyzeVideo: (url: string) => Promise<void>;
+    analyzeVideo: (input: string) => Promise<void>;
     abortAnalysis: () => void;
 }
 
-const API_URL = "http://localhost:8000/analyze_youtube_stream";
+const API_URL = "/api/analyze";
 
-type StreamEvent =
-    | {
-        status: "hashing" | "checking_url" | "downloading" | "cached";
-        progress?: number;
-    }
-    | {
-        status: "analyzing";
-        progress: number;
-    }
-    | {
-        status: "complete";
-        data: AnalysisResult[];
-    }
-    | {
-        status: "error";
-        error: string;
-    };
-
-/**
- * Custom hook to handle video analysis with streaming updates.
- */
 export function useVideoAnalysis(): UseVideoAnalysisReturn {
     const [data, setData] = useState<AnalysisResult[] | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -49,11 +29,16 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
         }
     };
 
-    const analyzeVideo = async (url: string) => {
+    const analyzeVideo = async (input: string) => {
+        if (!input) {
+            setError("Please paste a valid YouTube URL.");
+            return;
+        }
+
         setIsProcessing(true);
         setError(null);
         setData(null);
-        setProgress("Initializing analysis...");
+        setProgress("Downloading video and extracting frames (1 FPS)...");
 
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -68,52 +53,46 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({ url: input }),
                 signal: abortController.signal,
             });
 
-            if (!response.ok || !response.body) {
-                throw new Error("Analysis failed");
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-
-                for (const line of lines) {
-                    if (!line.trim()) continue;
-
-                    try {
-                        const event = JSON.parse(line);
-                        handleStreamEvent(event, setProgress, setData);
-                    } catch (e) {
-                        console.error("Error parsing stream", e);
-                    }
+            const payload = (await response.json().catch(() => null)) as
+                | {
+                    timeline?: AnalysisResult[];
+                    framesProcessed?: number;
+                    truncated?: boolean;
+                    error?: string;
                 }
+                | null;
+
+            if (!response.ok || !payload || "error" in payload) {
+                const message =
+                    (payload && "error" in payload && payload.error) ||
+                    "Analysis failed. Please try again.";
+                throw new Error(message);
             }
+
+            if (!payload.timeline || payload.timeline.length === 0) {
+                throw new Error("No frames were analyzed. Try a different video.");
+            }
+
+            setData(payload.timeline);
+            setProgress("");
         } catch (err) {
             const error = err as Partial<Error>;
             if (error?.name === "AbortError") {
-                console.log("Request aborted");
+                console.log("Roboflow request aborted");
             } else if (error?.message) {
                 setError(error.message);
                 console.error(err);
             } else {
-                setError("Failed to analyze YouTube video.");
+                setError("Failed to analyze the video.");
                 console.error(err);
             }
+            setProgress("");
         } finally {
-            if (abortControllerRef.current === abortController) {
-                setIsProcessing(false);
-            }
+            setIsProcessing(false);
         }
     };
 
@@ -126,37 +105,3 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
         abortAnalysis,
     };
 }
-
-/**
- * Handle individual stream events and update state accordingly.
- */
-function handleStreamEvent(
-    event: StreamEvent,
-    setProgress: (progress: string) => void,
-    setData: (data: AnalysisResult[]) => void
-) {
-    switch (event.status) {
-        case "hashing":
-            setProgress("Preparing video...");
-            break;
-        case "checking_url":
-            setProgress("Verifying video availability...");
-            break;
-        case "downloading":
-            setProgress("Downloading video...");
-            break;
-        case "cached":
-            setProgress("Loading from cache...");
-            break;
-        case "analyzing":
-            setProgress(`Processing: ${event.progress}%`);
-            break;
-        case "complete":
-            setData(event.data);
-            setProgress("");
-            break;
-        case "error":
-            throw new Error(event.error);
-    }
-}
-

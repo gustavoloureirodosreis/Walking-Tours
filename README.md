@@ -1,48 +1,53 @@
 # Crowd Density Analytics Dashboard
 
-A demo application for analyzing crowd density in videos using Roboflow's Inference SDK with a specialized People Detection model.
+This project now runs entirely on the **Next.js frontend**. A serverless API
+route inside the app downloads a YouTube video, samples **one frame per second**,
+and calls your Roboflow Rapid workflow to detect men vs. women.
 
 ## Architecture
 
-- **Frontend**: Next.js 15 (App Router) + Tailwind CSS + Recharts
-- **Backend**: FastAPI + Roboflow Inference (Hosted) + Supervision
+- **Frontend**: Next.js 15 (App Router) + Tailwind CSS + Recharts.
+- **Inference**: Roboflow Rapid serverless workflow (called from
+  `app/api/analyze/route.ts`). No standalone backend or local SAM3 clone needed.
 
 ## Prerequisites
 
-- Node.js (v18+)
-- Python (v3.11+)
-- Roboflow API Key
+- Node.js 20+
+- A Roboflow API key with access to the
+  `gustavos-training-workspace/workflows/find-men-and-women` workflow.
 
-## Setup & Run
-
-### 1. Backend
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Run the server (Set your API key)
-export ROBOFLOW_API_KEY="your_api_key_here"
-uvicorn main:app --reload
-```
-
-Server runs at `http://localhost:8000`.
-
-### 2. Frontend
+## Setup
 
 ```bash
 cd frontend
 npm install
+```
+
+Create `frontend/.env.local` and add:
+
+```
+ROBOFLOW_API_KEY=*********
+```
+
+## Run
+
+```bash
+cd frontend
 npm run dev
 ```
 
-Frontend runs at `http://localhost:3000`.
+Visit `http://localhost:3000`.
 
-## Usage
+## Using the Dashboard
 
-1. Open the frontend dashboard.
-2. Upload a video file (MP4, AVI, MOV).
-3. Wait for the analysis to complete.
-4. View the stats and crowd density timeline chart.
+1. Paste a public YouTube URL.
+2. The API route downloads the full video, extracts frames at 1 FPS with ffmpeg,
+   and sends each frame to Roboflow Rapid.
+3. Review the timeline (one data point per second), YouTube playback, and the
+   annotated preview returned by Roboflow.
+
+## Notes
+
+- The legacy FastAPI/SAM3 backend has been removed per the new requirements.
+- All heavy lifting (video download, ffmpeg, Roboflow calls) happens on the
+  server so the API key never ships to the browser.

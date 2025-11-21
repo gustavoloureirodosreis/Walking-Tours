@@ -1,9 +1,11 @@
+import { FrameSummary } from "@/lib/analysis";
 
 export interface AnalysisResult {
     timestamp: number;
     men: number;
     women: number;
     total: number;
+    frame?: FrameSummary;
 }
 
 export interface VideoStats {

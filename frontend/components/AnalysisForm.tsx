@@ -35,12 +35,16 @@ export default function AnalysisForm({
               <input
                 id="youtube-url"
                 type="url"
-                placeholder="Paste YouTube link here..."
+                placeholder="Paste a public YouTube link..."
                 className="w-full pl-12 pr-4 py-4 bg-input/20 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent text-foreground placeholder-muted-foreground outline-none transition-all shadow-inner text-lg font-mono"
                 value={youtubeUrl}
                 onChange={(e) => onUrlChange(e.target.value)}
                 disabled={isProcessing}
               />
+              <p className="mt-2 text-xs text-muted-foreground font-mono">
+                We download the full video server-side and sample it at 1 frame
+                per second.
+              </p>
             </div>
           </div>
 
@@ -63,7 +67,7 @@ export default function AnalysisForm({
               ) : (
                 <>
                   <PlayCircle className="w-5 h-5" />
-                  <span>Run Analysis</span>
+                  <span>Analyze Video</span>
                 </>
               )}
             </button>

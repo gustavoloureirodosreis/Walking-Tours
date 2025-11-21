@@ -1,13 +1,8 @@
-# Start Backend
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-# Use the API Key provided in your Roboflow dashboard
-export ROBOFLOW_API_KEY="YOUR_API_KEY_HERE"
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Start Frontend (in a new terminal)
+# Frontend + API Route (Roboflow Rapid)
 cd frontend
 npm install
+
+# Set your Roboflow API key in .env.local (only needs to be done once)
+# echo 'ROBOFLOW_API_KEY=your_key_here' >> .env.local
+
 npm run dev

@@ -3,20 +3,20 @@
  * Extract video ID from YouTube URL.
  * Supports both youtube.com and youtu.be formats.
  */
-export function extractVideoId(url: string): string {
+export function extractVideoId(url: string): string | null {
     try {
         const urlObj = new URL(url);
 
         if (urlObj.hostname.includes("youtube.com")) {
-            return urlObj.searchParams.get("v") || "";
+            return urlObj.searchParams.get("v") || null;
         } else if (urlObj.hostname.includes("youtu.be")) {
-            return urlObj.pathname.slice(1);
+            return urlObj.pathname.slice(1) || null;
         }
 
-        return "";
+        return null;
     } catch (e) {
         console.error("Invalid YouTube URL", e);
-        return "";
+        return null;
     }
 }
 

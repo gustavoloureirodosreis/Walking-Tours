@@ -1,8 +1,8 @@
 # Crowd Density Analytics Dashboard
 
 This project now runs entirely on the **Next.js frontend**. A serverless API
-route inside the app downloads a YouTube video, samples **one frame per second**,
-and calls your Roboflow Rapid workflow to detect men vs. women.
+route inside the app accepts a local video upload, samples **one frame per
+second**, and calls your Roboflow Rapid workflow to detect men vs. women.
 
 ## Architecture
 
@@ -40,14 +40,14 @@ Visit `http://localhost:3000`.
 
 ## Using the Dashboard
 
-1. Paste a public YouTube URL.
-2. The API route downloads the full video, extracts frames at 1 FPS with ffmpeg,
+1. Upload a local video file (MP4/MOV/WEBM/AVI, ≤500 MB / ~10 minutes).
+2. The API route stores it temporarily, extracts frames at 1 FPS with ffmpeg,
    and sends each frame to Roboflow Rapid.
-3. Review the timeline (one data point per second), YouTube playback, and the
-   annotated preview returned by Roboflow.
+3. Review the timeline (one data point per second) and the annotated preview
+   returned by Roboflow.
 
 ## Notes
 
 - The legacy FastAPI/SAM3 backend has been removed per the new requirements.
-- All heavy lifting (video download, ffmpeg, Roboflow calls) happens on the
-  server so the API key never ships to the browser.
+- All heavy lifting (upload, ffmpeg, Roboflow calls) happens on the server so
+  the API key never ships to the browser.

@@ -1,38 +1,24 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Activity, AlertCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import StatsCards from "@/components/StatsCards";
 import CrowdDensityChart from "@/components/CrowdDensityChart";
 import AnalysisForm from "@/components/AnalysisForm";
-import VideoPlayer, { VideoPlayerHandle } from "@/components/VideoPlayer";
 import { DetectionPreview } from "@/components/DetectionPreview";
 import { useVideoAnalysis } from "@/hooks/useVideoAnalysis";
-import { extractVideoId } from "@/lib/youtube";
 import { calculateStats } from "@/lib/stats";
 
 export default function Home() {
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [videoId, setVideoId] = useState<string | null>(null);
-  const videoPlayerRef = useRef<VideoPlayerHandle>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   const { data, isProcessing, error, progress, analyzeVideo, abortAnalysis } =
     useVideoAnalysis();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const sanitizedUrl = youtubeUrl.trim();
-    if (!sanitizedUrl) return;
-
-    const vidId = extractVideoId(sanitizedUrl);
-    setVideoId(vidId);
-
-    await analyzeVideo(sanitizedUrl);
-  };
-
-  const handleChartSeek = (timestamp: number) => {
-    videoPlayerRef.current?.seekTo(timestamp);
+  const handleUpload = async (file: File) => {
+    setSelectedFileName(file.name);
+    await analyzeVideo(file);
   };
 
   const stats = data ? calculateStats(data) : null;
@@ -56,21 +42,20 @@ export default function Home() {
           <p className="text-lg text-muted-foreground max-w-2xl font-sans">
             Real-time crowd analytics powered by{" "}
             <span className="text-primary font-bold">Roboflow Rapid</span>.
-            Paste a public YouTube link and we will download the full video,
-            sample 1 frame every second, and track{" "}
-            <span className="text-primary font-bold">men</span> vs.{" "}
-            <span className="text-primary font-bold">women</span> counts without
-            running SAM locally.
+            Upload any local video and we will sample{" "}
+            <span className="text-primary font-bold">1 frame per second</span>{" "}
+            to track <span className="text-primary font-bold">men</span> vs.{" "}
+            <span className="text-primary font-bold">women</span> counts—no GPU
+            or SAM installation required.
           </p>
         </header>
 
         {/* Analysis Form */}
         <AnalysisForm
-          youtubeUrl={youtubeUrl}
           isProcessing={isProcessing}
           progress={progress}
-          onUrlChange={setYoutubeUrl}
-          onSubmit={handleSubmit}
+          selectedFileName={selectedFileName}
+          onUpload={handleUpload}
           onAbort={abortAnalysis}
         />
 
@@ -81,7 +66,7 @@ export default function Home() {
               <AlertCircle className="w-10 h-10 opacity-80" />
               <span className="text-lg">{error}</span>
               <p className="text-sm opacity-70 font-normal">
-                Please try a different public YouTube video link.
+                Please try a different video file.
               </p>
             </div>
           </div>
@@ -94,13 +79,10 @@ export default function Home() {
 
             <div className="grid lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6 shadow-lg h-[500px]">
-                <CrowdDensityChart data={data} onSeek={handleChartSeek} />
+                <CrowdDensityChart data={data} />
               </div>
 
-              <div className="flex flex-col gap-6 lg:col-span-1">
-                <div className="h-[260px]">
-                  <VideoPlayer ref={videoPlayerRef} videoId={videoId} />
-                </div>
+              <div className="lg:col-span-1">
                 <DetectionPreview
                   result={latestResult}
                   isProcessing={isProcessing}

@@ -1,4 +1,3 @@
-import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
 import os from "os";
@@ -6,7 +5,6 @@ import crypto from "crypto";
 
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import ytdl from "@distube/ytdl-core";
 
 import { NextResponse } from "next/server";
 
@@ -17,6 +15,7 @@ const WORKFLOW_URL =
     "https://serverless.roboflow.com/gustavos-training-workspace/workflows/find-men-and-women";
 const FRAMES_PER_SECOND = 1;
 const MAX_FRAMES = 600; // safety cap
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500 MB limit
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -64,18 +63,6 @@ function pickFrameSummary(data: WorkflowResponse, dataUrl: string): FrameSummary
         detections,
         image: predictionsBlock?.image,
     };
-}
-
-async function downloadYouTubeVideo(videoUrl: string, destination: string) {
-    return new Promise<void>((resolve, reject) => {
-        const videoStream = ytdl(videoUrl, { quality: "highestvideo" });
-        const fileStream = fs.createWriteStream(destination);
-
-        videoStream.pipe(fileStream);
-        fileStream.on("finish", () => resolve());
-        fileStream.on("error", reject);
-        videoStream.on("error", reject);
-    });
 }
 
 async function extractFrames(videoPath: string, outputDir: string) {
@@ -158,22 +145,45 @@ function buildTimelineEntry(
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+function sanitizeFileName(filename: string): string {
+    return (
+        path.basename(filename).replace(/[^\w.-]/g, "_") || `upload-${Date.now()}.mp4`
+    );
+}
+
 export async function POST(request: Request) {
     let tempDir: string | null = null;
     try {
-        const body = await request.json();
-        const videoUrl = body?.url;
-
-        if (!videoUrl || typeof videoUrl !== "string") {
+        const contentType = request.headers.get("content-type") || "";
+        if (!contentType.includes("multipart/form-data")) {
             return NextResponse.json(
-                { error: "A valid YouTube URL is required." },
+                { error: "Expected multipart/form-data with a video file." },
                 { status: 400 },
             );
         }
 
-        if (!ytdl.validateURL(videoUrl)) {
+        const formData = await request.formData();
+        const file = formData.get("video");
+
+        if (!file || !(file instanceof File)) {
             return NextResponse.json(
-                { error: "Only public YouTube links are supported." },
+                { error: "Please upload a valid video file." },
+                { status: 400 },
+            );
+        }
+
+        if (file.size === 0) {
+            return NextResponse.json(
+                { error: "Uploaded file is empty. Please try again." },
+                { status: 400 },
+            );
+        }
+
+        if (file.size > MAX_UPLOAD_BYTES) {
+            return NextResponse.json(
+                {
+                    error: "Video is too large. Please upload a file smaller than 500 MB.",
+                },
                 { status: 400 },
             );
         }
@@ -188,10 +198,12 @@ export async function POST(request: Request) {
 
         tempDir = path.join(os.tmpdir(), `rf-video-${crypto.randomUUID()}`);
         const framesDir = path.join(tempDir, "frames");
-        const videoPath = path.join(tempDir, "source.mp4");
+        const videoPath = path.join(tempDir, sanitizeFileName(file.name || "upload.mp4"));
         await fsPromises.mkdir(framesDir, { recursive: true });
 
-        await downloadYouTubeVideo(videoUrl, videoPath);
+        const buffer = Buffer.from(await file.arrayBuffer());
+        await fsPromises.writeFile(videoPath, buffer);
+
         const frames = await extractFrames(videoPath, framesDir);
 
         if (frames.length === 0) {
@@ -233,28 +245,15 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error("Analyze API error", error);
-        const rawMessage =
+        const message =
             error instanceof Error
                 ? error.message
                 : "Unable to analyze the supplied video.";
 
-        let status = 500;
-        let message = rawMessage;
-
-        if (
-            /Could not extract/i.test(rawMessage) ||
-            /Sign in to confirm/i.test(rawMessage) ||
-            /video unavailable/i.test(rawMessage)
-        ) {
-            status = 400;
-            message =
-                "YouTube blocked this download (private/age-restricted/region-locked). Please try a fully public video.";
-        } else if (/status code/i.test(rawMessage) && /403|404|410/.test(rawMessage)) {
-            status = 400;
-            message = "Unable to fetch this YouTube video. Please verify the link is public.";
-        }
-
-        return NextResponse.json({ error: message }, { status });
+        return NextResponse.json(
+            { error: message || "Unable to analyze the supplied video." },
+            { status: 500 },
+        );
     } finally {
         await cleanupDirectory(tempDir);
     }

@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
     serverComponentsExternalPackages: [
       "@ffmpeg-installer/ffmpeg",
       "fluent-ffmpeg",
-      "@distube/ytdl-core",
     ],
   },
 };

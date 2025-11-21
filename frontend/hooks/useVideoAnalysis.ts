@@ -7,7 +7,7 @@ interface UseVideoAnalysisReturn {
     isProcessing: boolean;
     error: string | null;
     progress: string;
-    analyzeVideo: (input: string) => Promise<void>;
+    analyzeVideo: (file: File) => Promise<void>;
     abortAnalysis: () => void;
 }
 
@@ -29,16 +29,21 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
         }
     };
 
-    const analyzeVideo = async (input: string) => {
-        if (!input) {
-            setError("Please paste a valid YouTube URL.");
+    const analyzeVideo = async (file: File) => {
+        if (!file) {
+            setError("Please choose a video file.");
+            return;
+        }
+
+        if (!file.type.startsWith("video/")) {
+            setError("Only video files are supported.");
             return;
         }
 
         setIsProcessing(true);
         setError(null);
         setData(null);
-        setProgress("Downloading video and extracting frames (1 FPS)...");
+        setProgress("Uploading video and extracting frames (1 FPS)...");
 
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -48,12 +53,12 @@ export function useVideoAnalysis(): UseVideoAnalysisReturn {
         abortControllerRef.current = abortController;
 
         try {
+            const formData = new FormData();
+            formData.append("video", file);
+
             const response = await fetch(API_URL, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ url: input }),
+                body: formData,
                 signal: abortController.signal,
             });
 

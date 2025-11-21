@@ -89,7 +89,9 @@ export default function UploadZone({ onUpload, isUploading }: UploadZoneProps) {
           </p>
         </div>
 
-        <div className="text-xs text-gray-400">Supports MP4, AVI, MOV</div>
+        <div className="text-xs text-gray-400">
+          Supports MP4, MOV, WEBM (max 500 MB / ~10 min)
+        </div>
       </div>
     </div>
   );
